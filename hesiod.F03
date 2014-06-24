@@ -21,23 +21,25 @@ module hesiod
   !
   ! Contains data about the mesh on which the problem is defined
 
-  type mesh(num_elem, num_pt, num_lyr, deg, num_dim)
+  type mesh
      ! BASIC PROPERTIES
-     integer, len :: num_elem, num_pt, num_lyr, deg, num_dim
-     integer, dimension(num_elem,(deg+1)**num_dim) :: structure
-     real(kind(0.0d0)), dimension(deg+1) :: quad, weights
-     real(kind(0.0d0)), dimension(num_pt,num_dim) :: coords
+     integer :: num_elem, num_pt, num_lyr, deg, num_dim, num_quad
+     integer, dimension(:,:), allocatable :: structure 				!num_elem, num_quad
+     real(kind(0.0d0)), dimension(:), allocatable :: quad, weights			!(deg+1)
+     real(kind(0.0d0)), dimension(:,:), allocatable :: coords			!num_pt,num_dim
 
      ! DERIVED PROPERTIES
-     real(kind(0.0d0)), dimension((deg+1)**num_dim) :: weightProds
-     real(kind(0.0d0)), dimension((deg+1),(deg+1)) :: derivs
-     real(kind(0.0d0)), dimension(num_dim, (deg+1)**num_dim, (deg+1)**num_dim) :: diffs
-     real(kind(0.0d0)), dimension(num_elem, num_dim, num_dim, (deg+1)**num_dim) :: jac_mat, jac_inv
-     real(kind(0.0d0)), dimension(num_elem, num_dim, (deg+1)**num_dim, (deg+1)**num_dim) :: grad
-     real(kind(0.0d0)), dimension(num_elem, (deg+1)**num_dim) :: jac
+     real(kind(0.0d0)), dimension(:), allocatable :: weightProds			!num_quad
+     real(kind(0.0d0)), dimension(:,:), allocatable :: derivs			!deg+1,deg+1
+     real(kind(0.0d0)), dimension(:,:,:), allocatable :: diffs			!num_dim, num_quad, num_quad
+     real(kind(0.0d0)), dimension(:,:,:,:), allocatable :: jac_mat, jac_inv 		!num_elem, num_dim, num_dim, num_quad
+     real(kind(0.0d0)), dimension(:,:,:,:), allocatable :: grad 			!num_elem, num_dim, num_quad, num_quad
+     real(kind(0.0d0)), dimension(:,:), allocatable :: jac				!num_elem, num_quad
 
   contains
      ! PROCEDURES
+     procedure :: setParam => mesh_setParam
+     procedure :: setForm => mesh_setForm
      procedure :: getCoords => mesh_getCoords
      procedure :: getIndex => mesh_getIndex
      procedure :: calcDPhi => mesh_calcDPhi
@@ -53,14 +55,17 @@ module hesiod
   !
   ! Contains data about the fields to be evolved in the problem
 
-  type fields(num_fields, num_elem, num_pt, num_lyr, deg, num_dim)
+  type fields
      ! BASIC PROPERTIES
-     integer, len :: num_fields, num_pt, num_elem
+     integer, len :: num_fields, num_pt
      real(kind(0.0d0)), dimension(num_fields, num_pt) :: values
-     type(mesh(num_elem,num_pt,num_lyr,deg,num_dim)) :: base_mesh
+     type(mesh) :: base_mesh
      
      ! DERIVED PROPERTIES
      real(kind(0.0d0)), dimension(num_elem, num_fields, (deg+1)**num_dim) :: elem_values
+  contains
+     ! PROCEDURES
+     procedure :: setMesh => fields_setMesh
   end type fields
 
   ! type :: fn_ptr
@@ -96,6 +101,44 @@ contains
   !
   ! getCoords and getIndex determine the relationship between these two indexing methods.
 
+  subroutine mesh_setParam(this, num_dim, deg, num_elem, num_pt, num_lyr)
+     class(mesh), intent(inout) :: this
+     integer, intent(in) :: num_dim, deg, num_elem, num_pt, num_lyr
+     integer :: num_quad
+     num_quad = (deg+1)**num_dim
+
+     this%num_dim = num_dim
+     this%deg = deg
+     this%num_elem = num_elem
+     this%num_pt = num_pt
+     this%num_lyr = num_lyr
+     this%num_quad = num_quad
+
+     allocate(this%structure(num_elem, num_quad))
+     allocate(this%quad(deg+1))
+     allocate(this%weights(deg+1))
+     allocate(this%coords(num_pt,num_dim))
+     allocate(this%weightProds(num_quad))
+     allocate(this%derivs((deg+1),(deg+1)))
+     allocate(this%diffs(num_dim,num_quad,num_quad))
+     allocate(this%jac_mat(num_elem,num_dim,num_dim,num_quad))
+     allocate(this%jac_inv(num_elem,num_dim,num_dim,num_quad))
+     allocate(this%grad(num_elem,num_dim,num_quad,num_quad))
+     allocate(this%jac(num_elem,num_quad))
+  end subroutine mesh_param
+
+  subroutine mesh_setForm(this, structure, coords, quad, weights)
+     class(mesh), intent(inout) :: this
+     integer, dimension(this%num_elem,this%num_quad), intent(in) :: structure
+     real(kind(0.0d0)), dimension(this%num_pt,this%num_dim), intent(in) :: coords
+     real(kind(0.0d0)), dimension(this%deg+1), intent(in) :: quad, weights
+
+     this%structure = structure
+     this%coords = coords
+     this%quad = quad
+     this%weights = weights
+  end subroutine mesh_form
+
   subroutine mesh_getCoords(this, ind, indices)
      implicit none
      class(mesh), intent(in) :: this
@@ -107,8 +150,8 @@ contains
         indices(i) = ind/((this%deg+1)**(i-1)) + 1
         r = mod(ind, (this%deg+1)**(i-1))
         ind = r
-      enddo
-      indices(1) = indices(1) + 1
+     enddo
+     indices(1) = indices(1) + 1
   end subroutine
 
   subroutine mesh_getIndex(this, indices, ind)
@@ -218,11 +261,23 @@ contains
   subroutine mesh_calcJacInv(this)
      implicit none
      class(mesh), intent(inout) :: this
+
+     do m = 1, this%num_elem
+        do i = 1, this%num_quad
+           call mat_inv(this$num_dim,this%jac_mat(m,:,:,i),this%jac_inv(m,:,:,i))
+        enddo
+     enddo
   end subroutine mesh_calcJacInv
 
   subroutine mesh_calcJac(this)
      implicit none
      class(mesh), intent(inout) :: this
+
+     do m = 1, this%num_elem
+        do i = 1, this%num_quad
+           this%jac(m,i) = det(this%num_dim,this%jac_mat(m,:,:,i))
+        enddo
+     enddo
   end subroutine mesh_calcJac
 
   ! subroutine mesh_calcGrad
@@ -301,9 +356,16 @@ contains
 ! FIELDS SUBROUTINES !
 !!!!!!!!!!!!!!!!!!!!!!
 
+  subroutine fields_setMesh(this, base_mesh)
+     class(fields), intent(inout) :: this
+     type(mesh), intent(in) :: base_mesh
+
+     this%base_mesh = base_mesh
+  end subroutine
+
   subroutine fields_getElemValues(this)
      implicit none
-     class(fields), intent(in) :: this
+     class(fields), intent(inout) :: this
      integer :: p, i, f
 
      do m = 1, this%num_elem
@@ -318,7 +380,7 @@ contains
 
   subroutine fields_projectElemValues(this)
      implicit none
-     class(fields), intent(in) :: this
+     class(fields), intent(inout) :: this
      integer :: n, p, f, m, i
 
      n = (this%deg+1)**this%num_dim     
@@ -344,3 +406,4 @@ contains
      enddo
   end subroutine fields_projectElemValues
 end module hesiod
+
