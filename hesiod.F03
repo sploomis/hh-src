@@ -57,15 +57,16 @@ module hesiod
 
   type fields
      ! BASIC PROPERTIES
-     integer, len :: num_fields, num_pt
-     real(kind(0.0d0)), dimension(num_fields, num_pt) :: values
+     integer :: num_fields
+     real(kind(0.0d0)), dimension(:,:) :: values 		!num_fields, num_pt
      type(mesh) :: base_mesh
      
      ! DERIVED PROPERTIES
-     real(kind(0.0d0)), dimension(num_elem, num_fields, (deg+1)**num_dim) :: elem_values
+     real(kind(0.0d0)), dimension(:,:,:) :: elem_values 	!num_elem, num_fields, num_quad
   contains
      ! PROCEDURES
      procedure :: setMesh => fields_setMesh
+     procedure :: init => fields_init
   end type fields
 
   ! type :: fn_ptr
@@ -356,11 +357,21 @@ contains
 ! FIELDS SUBROUTINES !
 !!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine fields_setMesh(this, base_mesh)
+  subroutine fields_setMesh(this, base_mesh, num_fields)
      class(fields), intent(inout) :: this
      type(mesh), intent(in) :: base_mesh
 
      this%base_mesh = base_mesh
+
+     allocate(this%values(num_fields,base_mesh%num_pt))
+     allocate(this%elem_values(num_fields, base_mesh%num_elem, base_mesh%num_pt))
+  end subroutine
+
+  subroutine fields_init(this, values)
+     class(fields), intent(inout) :: this
+     real(kind(0.0d0)), dimension(this%num_fields,this%base_mesh%num_pt) :: values
+
+     this%values = values
   end subroutine
 
   subroutine fields_getElemValues(this)
@@ -372,7 +383,7 @@ contains
         do f = 1, this%num_fields
            do i = 1, this%num_ept
               p = this%base_mesh%structure(m,i)
-              this%elem_values(m, f, i) = this%values(f, p)
+              this%elem_values(f, m, i) = this%values(f, p)
            enddo
         enddo
      enddo
