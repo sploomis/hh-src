@@ -1,2 +1,3 @@
 This is a readme.
-This is the OVID branch of HH, which uses an independent module for performing linear algebra.
+This is the Greek branch of HH, which will use LAPACK and ScaLAPACK for performing linear algebra.
+This is limited to problems with small and dense Jacobians.
