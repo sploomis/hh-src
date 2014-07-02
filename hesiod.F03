@@ -23,17 +23,19 @@ module hesiod
 
   type mesh
      ! BASIC PROPERTIES
-     integer :: num_elem, num_pt, num_lyr, deg, num_dim, num_quad
+     integer :: num_elem, num_pt, num_lyr, deg, dim, num_quad
      integer, dimension(:,:), allocatable :: structure 				!num_elem, num_quad
      real(kind(0.0d0)), dimension(:), allocatable :: quad, weights			!(deg+1)
-     real(kind(0.0d0)), dimension(:,:), allocatable :: coords			!num_pt,num_dim
+     real(kind(0.0d0)), dimension(:,:), allocatable :: coords			!num_pt,dim
 
      ! DERIVED PROPERTIES
+     integer :: num_bd
+     integer, dimension(:), allocatable :: bd						!num_bd
      real(kind(0.0d0)), dimension(:), allocatable :: weightProds			!num_quad
      real(kind(0.0d0)), dimension(:,:), allocatable :: derivs			!deg+1,deg+1
-     real(kind(0.0d0)), dimension(:,:,:), allocatable :: diffs			!num_dim, num_quad, num_quad
-     real(kind(0.0d0)), dimension(:,:,:,:), allocatable :: jac_mat, jac_inv 		!num_elem, num_dim, num_dim, num_quad
-     real(kind(0.0d0)), dimension(:,:,:,:), allocatable :: grad 			!num_elem, num_dim, num_quad, num_quad
+     real(kind(0.0d0)), dimension(:,:,:), allocatable :: diffs			!dim, num_quad, num_quad
+     real(kind(0.0d0)), dimension(:,:,:,:), allocatable :: jac_mat, jac_inv 		!num_elem, dim, dim, num_quad
+     real(kind(0.0d0)), dimension(:,:,:,:), allocatable :: grad 			!num_elem, dim, num_quad, num_quad
      real(kind(0.0d0)), dimension(:,:), allocatable :: jac				!num_elem, num_quad
 
   contains
@@ -73,23 +75,36 @@ module hesiod
   !
   ! Contains a pointer to a function. Allows us to create functional arrays.
 
-  type fn_ptr
-     procedure, pointer :: fp
+  type fn_ptr(dim, num_fields, num_quad)
+     integer, len :: dim, num_fields, num_quad
+     procedure(RHS), pointer :: fp
+
+     abstract interface
+        function RHS(values, diff, grad) result(ans)
+           real(kind(0.0d0)), dimension(num_fields, num_quad), intent(in) :: u
+           real(kind(0.0d0)), dimension(dim, num_quad, num_quad) :: diff, grad
+           real(kind(0.0d0)), dimension(num_quad) :: ans
+        end function RHS
+     end interface
   end type fn_ptr
 
   ! type :: equation
   !
   ! Contains data about the equations governing the problem, as well as how we'd like to evolve them.
 
-  type equation(num_split, num_fields)
+  type equation(dim, num_fields, num_quad)
     ! BASIC PROPERTIES
-    integer, len :: num_split, num_fields
-    type(fn_ptr), dimension(num_fields,num_split) :: Ops
-    character(len=10) :: split_type
-    character(len=10) :: evolve_type
+    integer, len :: dim, num_fields, num_quad
+    type(fn_ptr(dim, num_fields, num_quad)), dimension(:,:), allocatable :: operators
+    integer :: num_split
+    double precision :: theta
+
+  contains
+    procedure :: addOps => equation_addOps
+    procedure :: addInfo => equation_addInfo
   end type equation
 
-contains
+  contains
 
 !!!!!!!!!!!!!!!!!!!!
 ! MESH SUBROUTINES !
@@ -98,17 +113,17 @@ contains
   ! subroutines mesh%getCoords and mesh%getIndex
   !
   ! Within an element, nodal points are parametrized by either the master index
-  ! or the mesh%num_dim-tuplet of indices, each of which runs from 1 to (mesh%deg + 1).
+  ! or the mesh%dim-tuplet of indices, each of which runs from 1 to (mesh%deg + 1).
   !
   ! getCoords and getIndex determine the relationship between these two indexing methods.
 
-  subroutine mesh_setParam(this, num_dim, deg, num_elem, num_pt, num_lyr)
+  subroutine mesh_setParam(this, dim, deg, num_elem, num_pt, num_lyr)
      class(mesh), intent(inout) :: this
-     integer, intent(in) :: num_dim, deg, num_elem, num_pt, num_lyr
+     integer, intent(in) :: dim, deg, num_elem, num_pt, num_lyr
      integer :: num_quad
-     num_quad = (deg+1)**num_dim
+     num_quad = (deg+1)**dim
 
-     this%num_dim = num_dim
+     this%dim = dim
      this%deg = deg
      this%num_elem = num_elem
      this%num_pt = num_pt
@@ -118,20 +133,20 @@ contains
      allocate(this%structure(num_elem, num_quad))
      allocate(this%quad(deg+1))
      allocate(this%weights(deg+1))
-     allocate(this%coords(num_pt,num_dim))
+     allocate(this%coords(num_pt,dim))
      allocate(this%weightProds(num_quad))
      allocate(this%derivs((deg+1),(deg+1)))
-     allocate(this%diffs(num_dim,num_quad,num_quad))
-     allocate(this%jac_mat(num_elem,num_dim,num_dim,num_quad))
-     allocate(this%jac_inv(num_elem,num_dim,num_dim,num_quad))
-     allocate(this%grad(num_elem,num_dim,num_quad,num_quad))
+     allocate(this%diffs(dim,num_quad,num_quad))
+     allocate(this%jac_mat(num_elem,dim,dim,num_quad))
+     allocate(this%jac_inv(num_elem,dim,dim,num_quad))
+     allocate(this%grad(num_elem,dim,num_quad,num_quad))
      allocate(this%jac(num_elem,num_quad))
   end subroutine mesh_param
 
   subroutine mesh_setForm(this, structure, coords, quad, weights)
      class(mesh), intent(inout) :: this
      integer, dimension(this%num_elem,this%num_quad), intent(in) :: structure
-     real(kind(0.0d0)), dimension(this%num_pt,this%num_dim), intent(in) :: coords
+     real(kind(0.0d0)), dimension(this%num_pt,this%dim), intent(in) :: coords
      real(kind(0.0d0)), dimension(this%deg+1), intent(in) :: quad, weights
 
      this%structure = structure
@@ -144,10 +159,10 @@ contains
      implicit none
      class(mesh), intent(in) :: this
      integer, intent(in) :: ind
-     integer, dimension(this%num_dim), intent(out) :: indices
+     integer, dimension(this%dim), intent(out) :: indices
      integer :: i, r
 
-     do i = this%num_dim, 1, -1
+     do i = this%dim, 1, -1
         indices(i) = ind/((this%deg+1)**(i-1)) + 1
         r = mod(ind, (this%deg+1)**(i-1))
         ind = r
@@ -158,12 +173,12 @@ contains
   subroutine mesh_getIndex(this, indices, ind)
      implicit none
      class(mesh), intent(in) :: this
-     integer, dimension(this%num_dim), intent(in) :: indices
+     integer, dimension(this%dim), intent(in) :: indices
      integer, intent(out) :: ind
      integer :: i
 
      ind = indices(1)
-     do i = 1, (this%num_dim-1)
+     do i = 1, (this%dim-1)
         ind = ind + (indices(i+1) - 1)*(this%deg + 1)**i
      enddo
   end subroutine
@@ -206,20 +221,20 @@ contains
   subroutine mesh_calcDiff(this)
      implicit none
      class(mesh), intent(inout) :: this
-     integer, dimension(this%num_dim) :: iv, jv
+     integer, dimension(this%dim) :: iv, jv
      integer :: a, b, i, j
      integer :: n
      real(kind(0.0d0)) :: diff
 
-     n = (this%deg+1)**this%num_dim
+     n = (this%deg+1)**this%dim
 
-     do a = 1, this%num_dim
+     do a = 1, this%dim
         do i = 1, n
            do j = 1, n
               call this%getCoords(i,iv)
               call this%getCoords(j,jv)
               diff = this%derivs(jv(a),iv(a))
-              do b = 1, this%num_dim
+              do b = 1, this%dim
                  if ((b .ne. a) .and. (jv(b) .ne. iv(b))) then
                     diff = 0.0d0
                  endif
@@ -242,11 +257,11 @@ contains
      integer :: m, a, b, i, j, n 
      real(kind(0.0d0)) :: jsum
 
-     n = (this%deg+1)**this%num_dim
+     n = (this%deg+1)**this%dim
 
      do m = 1, this%num_elem
-        do a = 1, this%num_dim
-           do b = 1, this%num_dim
+        do a = 1, this%dim
+           do b = 1, this%dim
               do i = 1, n
                  jsum = 0.0d0
                  do j = 1, n
@@ -265,7 +280,7 @@ contains
 
      do m = 1, this%num_elem
         do i = 1, this%num_quad
-           call mat_inv(this$num_dim,this%jac_mat(m,:,:,i),this%jac_inv(m,:,:,i))
+           call mat_inv(this%dim,this%jac_mat(m,:,:,i),this%jac_inv(m,:,:,i))
         enddo
      enddo
   end subroutine mesh_calcJacInv
@@ -276,7 +291,7 @@ contains
 
      do m = 1, this%num_elem
         do i = 1, this%num_quad
-           this%jac(m,i) = det(this%num_dim,this%jac_mat(m,:,:,i))
+           this%jac(m,i) = det(this%dim,this%jac_mat(m,:,:,i))
         enddo
      enddo
   end subroutine mesh_calcJac
@@ -291,13 +306,13 @@ contains
      class(mesh), intent(inout) :: this
      real(kind(0.0d0)) :: dsum
 
-     n = (this%deg+1)**this%num_dim
+     n = (this%deg+1)**this%dim
      
      do i = 1, n
         do j = 1, n
-           do a = 1, num_dim
+           do a = 1, dim
               dsum = 0.0d0
-              do b = 1, num_dim
+              do b = 1, dim
                  dsum = dsum + this%jac_inv(m,a,b,i)*this%diffs(b,i,j)
               enddo
               this%grad(m,a,i,j) = dsum
@@ -310,15 +325,15 @@ contains
      implicit none
      class(mesh), intent(inout) :: this
      real(kind(0.0d0)) :: prod
-     integer, dimension(this%num_dim) :: indices
+     integer, dimension(this%dim) :: indices
      integer :: i, a
 
-     n = (this%deg+1)**this%num_dim
+     n = (this%deg+1)**this%dim
 
      do i = 1, n
         call this%getCoords(i, indices)
         prod = 1.0d0
-        do a = 1, this%num_dim
+        do a = 1, this%dim
            prod = prod*weights(indices(a))
         enddo
         this%weight_prods(i) = prod
@@ -333,7 +348,7 @@ contains
      integer :: p, m, n, i
 
 
-     n = (this%deg+1)**this%num_dim
+     n = (this%deg+1)**this%dim
 
      do p = 1, this%num_pt
         W(p) = 0.0d0
@@ -394,7 +409,8 @@ contains
      class(fields), intent(inout) :: this
      integer :: n, p, f, m, i
 
-     n = (this%deg+1)**this%num_dim     
+     n = (this%deg+1)**this%dim     
+
 
      do p = 1, this%num_pt
         values(p) = 0.0d0
@@ -416,5 +432,26 @@ contains
         enddo
      enddo
   end subroutine fields_projectElemValues
+
+!!!!!!!!!!!!!!!!!!!!!!!!
+! EQUATION SUBROUTINES !
+!!!!!!!!!!!!!!!!!!!!!!!!
+
+  subroutine equation_addOps(this, num_split, operators)
+     class(equation(:,:,:)) :: this
+     integer :: num_split
+     real(kind(0.0d0)), dimension(this%num_fields, num_split) :: operators
+
+     this%num_split = num_split
+     allocate(this%operators(this%num_fields, num_split))
+     this%operators = operators
+  end subroutine equation_addOps
+
+  subroutine equation_addTheta(this, theta)
+     class(equation(:,:,:)) :: this
+     real(kind(0.0d0)) :: theta
+
+     this%theta = theta
+  end subroutine equation_addInfo
 end module hesiod
 

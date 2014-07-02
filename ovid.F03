@@ -15,6 +15,25 @@ module ovid
      procedure :: elemAt => sparse_elemAt
   end type sparse
 
+  type sparse_vec
+     integer :: size, num_elem
+     integer, dimension(:) :: indices
+     real(kind(0.0d0)), dimension(:), allocatable :: values
+
+  contains
+     procedure :: init => sparse_vec_init
+     procedure :: add => sparse_vec_add
+     procedure :: rm => sparse_vec_rm
+     procedure :: check => sparse_vec_check
+     procedure :: elemAt => sparse_vec_elemAt
+  end type
+
+  type sparse_rows
+  end type
+
+  type sparse_cols
+  end type
+
 contains
 
   subroutine LU_decompose(n, mat, out_mat)
@@ -37,6 +56,19 @@ contains
            enddo
         enddo
      enddo
+  end subroutine
+
+  subroutine LU_decompose_sparse(n, mat, out_mat)
+     integer, intent(in) :: n
+     type(sparse), intent(in) :: mat
+     type(sparse), intent(out) :: out_mat
+
+     if ((mat%num_row .ne. n) .or. (mat%num_col .ne. n)) then
+        write(*,*) "Error: Matrix bounds do not match given size"
+     endif
+
+     
+
   end subroutine
 
   subroutine mat_inv(n, mat, inv)
@@ -103,105 +135,48 @@ contains
      endif
   end function det
 
-  subroutine sparse_init(this, num_row, num_col)
-     class(sparse), intent(inout) :: this
-     integer, intent(in) :: num_row, num_col
+  subroutine sparse_vec_init(this, sz)
+     class(sparse_vec), intent(inout) :: this
+     integer, intent(in) :: sz
 
-     this%num_row = num_row
-     this%num_col = num_col
+     this%size = sz
      this%num_elem = 0
   end subroutine sparse_init
 
-  subroutine sparse_add(this, num_add, indices, values)
+  subroutine sparse_vec_add(this, ind, val)
      class(sparse), intent(inout) :: this
-     integer, intent(in) :: num_add
-     integer, dimension(2, num_add), intent(in) :: indices
-     real(kind(0.0d0)), dimension(num_add), intent(in) :: values
-     integer, dimension(:,:), allocatable :: new_indices, tmp_indices
-     integer, dimension(:), allocatable :: new_values, tmp_values
-
-     if (this%num_elem .eq. 0) then
-        this%num_elem = 1
-        allocate(this%indices(2,1))
-        allocate(this%values(1))
-        this%indices(:,1) = indices(:,1)
-        this%values(1) = values(1)
-        if (num_add .ge. 1) then
-           do i = 2, num_add
-              this%addOne(indices(:,i),values(i))
-           enddo
-        endif
-     else
-        do i = 1, num_add
-           this%addOne(indices(:,i),values(i))
-        enddo
-     endif
-  end subroutine sparse_add
-
-  subroutine sparse_addOne(this, ind, val)
-     class(sparse), intent(inout) :: this
-     integer, dimension(2), intent(in) :: ind
+     integer, intent(in) :: ind
      real(kind(0.0d0)), intent(in) :: val
-     integer, dimension(:,:), allocatable :: new_indices
-     real(kind(0.0d0)), dimension(:), allocatable :: new_values
      integer :: info
 
-     call this%verify(ind, val, info)
-     if (info .eq. 0) then
-        i = thi%elemAt(ind)
+     this%check(ind,val,1.0d-10,info)
 
-        if (i .ne. 0) then
-           this%values(i) = val
-        else
-           allocate(new_indices(2,this%num_elem+1))
-           allocate(values(this%num_elem+1))
-
-           do j = 1, this%num_elem
-              do k = 1, 2
-                 new_indices(k,j) = this%indices(k,j)
-              enddo
-              new_values(j) = this%values(j)
-           enddo
-
-           deallocate(this%indices)
-           deallocate(this%values)
-           this%num_elem = this%num_elem + 1
-           allocate(this%indices(2,this%num_elem))
-           allocate(this%values(this%num_elem))
-
-           do k = 1, 2
-              new_indices(k,num_elem) = ind(k)
-           enddo
-
-           new_values(num_elem) = val
-           this%indices = new_indices
-           this%values = new_values
-        endif
-     elseif (info .eq. 1) then
-        write(*,*) "Error: Indices are out of bounds"
-     else
-        write(*,*) "Error: Can't enter a zero value"
+     if (info = 1) then
+        write(*,*) "sparse_vec_add: Could not add: outside of vector bounds"
+     elseif (info = 2) then
+        this%rm(ind)
+        
      endif
-  end subroutine sparse_addOne
-            
+     
+  end subroutine sparse_add
 
-  function sparse_elemAt(this, ind) result(ans)
-     class(sparse), intent(in) :: this
+  function sparse_vec_elemAt(this, ind) result(ans)
+     class(sparse_vec), intent(in) :: this
      integer, dimension(2), intent(in) :: ind
      integer :: ans
      integer :: i
 
      ans = 0
      do i = 1, this%num_elem
-        if (this%elements(:,i) .eq. ind)
+        if (this%indices(i) .eq. ind)
            ans = i
         endif
      enddo
-  end function sparse_elemAt
+  end function sparse_vec_elemAt
 
-  subroutine sparse_verify(this, ind, val, threshold, info)
-     class(sparse), intent(in) :: this
-     integer, dimension(2), intent(in) :: ind
+  subroutine sparse_vec_check(this, ind, val, threshold, info)
+     class(sparse_vec), intent(in) :: this
+     integer, intent(in) :: ind
      real(kind(0.0d0)), intent(in) :: val
      real(kind(0.0d0)), optional, intent(in) :: threshold
      real(kind(0.0d0)) :: th
@@ -210,16 +185,13 @@ contains
      if (present(threshold)) then
         th = threshold
      else
-        th = 1.0d-5
+        th = 1.0d-10
      endif
 
      info = 0
 
      ! Check if there are any out-of-bounds indices
-     if ((ind(1) .ge. this%num_row) .or. (ind(1) .le. 0)) then
-        info = 1
-     endif
-     if ((ind(2) .ge. this%num_col) .or. (ind(2) .le. 0)) then
+     if ((ind .ge. this%size) .or. (ind .le. 0)) then
         info = 1
      endif
 
