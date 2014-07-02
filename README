@@ -1,2 +1,2 @@
 This is a readme.
-This is the VIRGIL branch of HH, which uses a module to interface the Fortran data types in HESIOD with the C data types in TRILINOS.
+This is the Roman branch of HH, which uses a module to interface the Fortran data types in HESIOD with the C data types in TRILINOS.
