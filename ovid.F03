@@ -1,39 +1,6 @@
 module ovid
   implicit none
 
-  type sparse
-     integer :: num_row, num_col, num_elem
-     integer, dimension(:,:), allocatable :: indices
-     real(kind(0.0d0)), dimension(:), allocatable :: values
-
-  contains
-     procedure :: init => sparse_init
-     procedure :: add => sparse_add
-     procedure :: addOne => sparse_addOne
-     procedure :: rm => sparse_rm
-     procedure :: verify => sparse_verify
-     procedure :: elemAt => sparse_elemAt
-  end type sparse
-
-  type sparse_vec
-     integer :: size, num_elem
-     integer, dimension(:) :: indices
-     real(kind(0.0d0)), dimension(:), allocatable :: values
-
-  contains
-     procedure :: init => sparse_vec_init
-     procedure :: add => sparse_vec_add
-     procedure :: rm => sparse_vec_rm
-     procedure :: check => sparse_vec_check
-     procedure :: elemAt => sparse_vec_elemAt
-  end type
-
-  type sparse_rows
-  end type
-
-  type sparse_cols
-  end type
-
 contains
 
   subroutine LU_decompose(n, mat, out_mat)
@@ -56,19 +23,6 @@ contains
            enddo
         enddo
      enddo
-  end subroutine
-
-  subroutine LU_decompose_sparse(n, mat, out_mat)
-     integer, intent(in) :: n
-     type(sparse), intent(in) :: mat
-     type(sparse), intent(out) :: out_mat
-
-     if ((mat%num_row .ne. n) .or. (mat%num_col .ne. n)) then
-        write(*,*) "Error: Matrix bounds do not match given size"
-     endif
-
-     
-
   end subroutine
 
   subroutine mat_inv(n, mat, inv)
@@ -113,7 +67,7 @@ contains
      real(kind(0.0d0)) :: cf
      integer :: i
 
-     if (n .ge. 1) then
+     if (n .ge. 2) then
         mat_nxt(1:(n-1),:) = mat(2:n,2:n)
         cf = det(n-1,mat_nxt)
         res = cf
@@ -134,70 +88,4 @@ contains
         return
      endif
   end function det
-
-  subroutine sparse_vec_init(this, sz)
-     class(sparse_vec), intent(inout) :: this
-     integer, intent(in) :: sz
-
-     this%size = sz
-     this%num_elem = 0
-  end subroutine sparse_init
-
-  subroutine sparse_vec_add(this, ind, val)
-     class(sparse), intent(inout) :: this
-     integer, intent(in) :: ind
-     real(kind(0.0d0)), intent(in) :: val
-     integer :: info
-
-     this%check(ind,val,1.0d-10,info)
-
-     if (info = 1) then
-        write(*,*) "sparse_vec_add: Could not add: outside of vector bounds"
-     elseif (info = 2) then
-        this%rm(ind)
-        
-     endif
-     
-  end subroutine sparse_add
-
-  function sparse_vec_elemAt(this, ind) result(ans)
-     class(sparse_vec), intent(in) :: this
-     integer, dimension(2), intent(in) :: ind
-     integer :: ans
-     integer :: i
-
-     ans = 0
-     do i = 1, this%num_elem
-        if (this%indices(i) .eq. ind)
-           ans = i
-        endif
-     enddo
-  end function sparse_vec_elemAt
-
-  subroutine sparse_vec_check(this, ind, val, threshold, info)
-     class(sparse_vec), intent(in) :: this
-     integer, intent(in) :: ind
-     real(kind(0.0d0)), intent(in) :: val
-     real(kind(0.0d0)), optional, intent(in) :: threshold
-     real(kind(0.0d0)) :: th
-     integer, intent(out) :: info
-     
-     if (present(threshold)) then
-        th = threshold
-     else
-        th = 1.0d-10
-     endif
-
-     info = 0
-
-     ! Check if there are any out-of-bounds indices
-     if ((ind .ge. this%size) .or. (ind .le. 0)) then
-        info = 1
-     endif
-
-     ! Check if there is a zero value
-     if (abs(val) .le. th) then
-        info = 2
-     endif
-  end subroutine sparse_verify
 end module ovid

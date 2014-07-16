@@ -11,6 +11,7 @@
 !        equation
 !
 module hesiod
+  use ovid
   implicit none
 
 !!!!!!!!!!!!!!!!!!!!!
@@ -36,7 +37,8 @@ module hesiod
      real(kind(0.0d0)), dimension(:,:,:), allocatable :: diffs			!dim, num_quad, num_quad
      real(kind(0.0d0)), dimension(:,:,:,:), allocatable :: jac_mat, jac_inv 		!num_elem, dim, dim, num_quad
      real(kind(0.0d0)), dimension(:,:,:,:), allocatable :: grad 			!num_elem, dim, num_quad, num_quad
-     real(kind(0.0d0)), dimension(:,:), allocatable :: jac				!num_elem, num_quad
+     real(kind(0.0d0)), dimension(:,:), allocatable :: jac, Jw				!num_elem, num_quad
+     real(kind(0.0d0)), dimension(:,:), allocatable :: projector			!num_elem, num_quad
 
   contains
      ! PROCEDURES
@@ -50,6 +52,8 @@ module hesiod
      procedure :: calcJacInv => mesh_calcJacInv
      procedure :: calcJac => mesh_calcJac
      procedure :: calcGrad => mesh_calcGrad
+     procedure :: calcWeights => mesh_calcWeights
+     procedure :: calcProj => mesh_calcProj
 
   end type mesh
 
@@ -60,48 +64,52 @@ module hesiod
   type fields
      ! BASIC PROPERTIES
      integer :: num_fields
-     real(kind(0.0d0)), dimension(:,:) :: values 		!num_fields, num_pt
-     type(mesh) :: base_mesh
+     real(kind(0.0d0)), dimension(:,:), allocatable :: values 		!num_fields, num_pt
+     type(mesh) :: base
      
      ! DERIVED PROPERTIES
-     real(kind(0.0d0)), dimension(:,:,:) :: elem_values 	!num_elem, num_fields, num_quad
+     real(kind(0.0d0)), dimension(:,:,:), allocatable :: elem_values 	!num_elem, num_fields, num_quad
   contains
      ! PROCEDURES
      procedure :: setMesh => fields_setMesh
      procedure :: init => fields_init
+     procedure :: getElemValues => fields_getElemValues
+     procedure :: projectElemValues => fields_projectElemValues
   end type fields
 
   ! type :: fn_ptr
   !
   ! Contains a pointer to a function. Allows us to create functional arrays.
 
-  type fn_ptr(dim, num_fields, num_quad)
-     integer, len :: dim, num_fields, num_quad
-     procedure(RHS), pointer :: fp
+  interface rhs_form
+     function RHS(dim, num_fields, num_quad, u, diff, grad, t) result(ans)
+        integer, intent(in) :: dim, num_fields, num_quad
+        real(kind(0.0d0)), dimension(num_fields, num_quad) :: u
+        real(kind(0.0d0)), dimension(dim, num_quad, num_quad) :: diff, grad
+        real(kind(0.0d0)), dimension(num_quad) :: ans
+        real(kind(0.0d0)) :: t
+     end function RHS
+  end interface rhs_form
 
-     abstract interface
-        function RHS(values, diff, grad) result(ans)
-           real(kind(0.0d0)), dimension(num_fields, num_quad), intent(in) :: u
-           real(kind(0.0d0)), dimension(dim, num_quad, num_quad) :: diff, grad
-           real(kind(0.0d0)), dimension(num_quad) :: ans
-        end function RHS
-     end interface
+  type fn_ptr
+     procedure(RHS), pointer, nopass :: fp
   end type fn_ptr
 
   ! type :: equation
   !
   ! Contains data about the equations governing the problem, as well as how we'd like to evolve them.
 
-  type equation(dim, num_fields, num_quad)
+  type equation
     ! BASIC PROPERTIES
-    integer, len :: dim, num_fields, num_quad
-    type(fn_ptr(dim, num_fields, num_quad)), dimension(:,:), allocatable :: operators
+    integer :: dim, num_fields, num_quad
+    type(fn_ptr), dimension(:,:), allocatable :: operators
     integer :: num_split
     double precision :: theta
 
   contains
     procedure :: addOps => equation_addOps
-    procedure :: addInfo => equation_addInfo
+    procedure :: addTheta => equation_addTheta
+
   end type equation
 
   contains
@@ -141,7 +149,9 @@ module hesiod
      allocate(this%jac_inv(num_elem,dim,dim,num_quad))
      allocate(this%grad(num_elem,dim,num_quad,num_quad))
      allocate(this%jac(num_elem,num_quad))
-  end subroutine mesh_param
+     allocate(this%jw(num_elem,num_quad))
+     allocate(this%projector(num_elem,num_quad))
+  end subroutine mesh_setParam
 
   subroutine mesh_setForm(this, structure, coords, quad, weights)
      class(mesh), intent(inout) :: this
@@ -153,21 +163,22 @@ module hesiod
      this%coords = coords
      this%quad = quad
      this%weights = weights
-  end subroutine mesh_form
+  end subroutine mesh_setForm
 
   subroutine mesh_getCoords(this, ind, indices)
      implicit none
      class(mesh), intent(in) :: this
      integer, intent(in) :: ind
      integer, dimension(this%dim), intent(out) :: indices
-     integer :: i, r
+     integer :: ind1, i, r
+
+     ind1 = ind
 
      do i = this%dim, 1, -1
-        indices(i) = ind/((this%deg+1)**(i-1)) + 1
+        indices(i) = ind1/((this%deg+1)**(i-1))
         r = mod(ind, (this%deg+1)**(i-1))
-        ind = r
+        ind1 = r
      enddo
-     indices(1) = indices(1) + 1
   end subroutine
 
   subroutine mesh_getIndex(this, indices, ind)
@@ -195,19 +206,23 @@ module hesiod
 
      do i = 1, this%deg+1
         do j = 1, this%deg+1
-           psum = 0
-           do k = 1, this%deg+1
-              if (i .ne. k) then
-                 prod = 1.0d0/(this%quad(i) - this%quad(k))
-                 do l = 1, this%deg+1
-                    if ((l .ne. i) .and. (l .ne. k)) then
-                       prod = prod*(this%quad(j) - this%quad(k))*1.0d0/(this%quad(i) - this%quad(k))
-                    endif
-                 enddo
-              endif
-              psum = psum + prod
-           enddo
-           this%derivs(j,i) = psum
+           if (i .eq. j) then
+              psum = 0.0d0
+              do k = 1, this%deg+1
+                 if (k .ne. i) then
+                    psum = psum + 1.0d0/(this%quad(i) - this%quad(k))
+                 endif
+              enddo
+              this%derivs(i,j) = psum
+           else
+              prod = 1.0d0/(this%quad(i) - this%quad(j))
+              do k = 1, this%deg+1
+                 if ((k .ne. j) .and. (k .ne. i)) then
+                    prod = prod*(this%quad(j) - this%quad(k))/(this%quad(i) - this%quad(k))
+                 endif
+              enddo
+              this%derivs(i,j) = prod
+           endif
         enddo
      enddo
   end subroutine mesh_calcDPhi
@@ -235,8 +250,8 @@ module hesiod
               call this%getCoords(j,jv)
               diff = this%derivs(jv(a),iv(a))
               do b = 1, this%dim
-                 if ((b .ne. a) .and. (jv(b) .ne. iv(b))) then
-                    diff = 0.0d0
+                 if (b .ne. a) then
+                    if (jv(b) .ne. iv(b)) diff = 0.0d0
                  endif
               enddo
               this%diffs(a,i,j) = diff
@@ -277,6 +292,7 @@ module hesiod
   subroutine mesh_calcJacInv(this)
      implicit none
      class(mesh), intent(inout) :: this
+     integer :: m, i
 
      do m = 1, this%num_elem
         do i = 1, this%num_quad
@@ -288,6 +304,7 @@ module hesiod
   subroutine mesh_calcJac(this)
      implicit none
      class(mesh), intent(inout) :: this
+     integer :: m, i
 
      do m = 1, this%num_elem
         do i = 1, this%num_quad
@@ -305,28 +322,35 @@ module hesiod
      implicit none
      class(mesh), intent(inout) :: this
      real(kind(0.0d0)) :: dsum
+     integer :: m, n, i, j, a, b
 
      n = (this%deg+1)**this%dim
-     
-     do i = 1, n
-        do j = 1, n
-           do a = 1, dim
-              dsum = 0.0d0
-              do b = 1, dim
-                 dsum = dsum + this%jac_inv(m,a,b,i)*this%diffs(b,i,j)
+     do m = 1, this%num_elem
+        do i = 1, n
+           do j = 1, n
+              do a = 1, this%dim
+                 dsum = 0.0d0
+                 do b = 1, this%dim
+                    dsum = dsum + this%jac_inv(m,a,b,i)*this%diffs(b,i,j)
+                 enddo
+                 this%grad(m,a,i,j) = dsum
               enddo
-              this%grad(m,a,i,j) = dsum
            enddo
         enddo
      enddo
   end subroutine mesh_calcGrad
+
+  ! subroutines mesh%calcWeights and mesh%calcProj
+  !
+  ! Calculates the weights at the quadrature points and the resulting mass matrix.
+  ! These values are then used in calculating the projection matrix.
 
   subroutine mesh_calcWeights(this)
      implicit none
      class(mesh), intent(inout) :: this
      real(kind(0.0d0)) :: prod
      integer, dimension(this%dim) :: indices
-     integer :: i, a
+     integer :: n, i, a
 
      n = (this%deg+1)**this%dim
 
@@ -334,9 +358,9 @@ module hesiod
         call this%getCoords(i, indices)
         prod = 1.0d0
         do a = 1, this%dim
-           prod = prod*weights(indices(a))
+           prod = prod*this%weights(indices(a))
         enddo
-        this%weight_prods(i) = prod
+        this%weightProds(i) = prod
      enddo
   end subroutine mesh_calcWeights
 
@@ -357,13 +381,14 @@ module hesiod
      do m = 1, this%num_elem
         do i = 1, n
            psum = W(this%structure(m,i))
-           W(this%structure(m,i)) = psum + this%weight_prods(i)*this%jac(m,i)
+           W(this%structure(m,i)) = psum + this%weightProds(i)*this%jac(m,i)
         enddo
      enddo
 
      do m = 1, this%num_elem
         do i = 1, n
-           projector(m,i) = this%weight_prods(i)*this%jac(m,i)/W(this%structure(m,i))
+           this%projector(m,i) = this%weightProds(i)*this%jac(m,i)/W(this%structure(m,i))
+           this%Jw(m,i) = this%weightProds(i)*this%jac(m,i)
         enddo
      enddo
   end subroutine mesh_calcProj
@@ -372,32 +397,42 @@ module hesiod
 ! FIELDS SUBROUTINES !
 !!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine fields_setMesh(this, base_mesh, num_fields)
+  ! subroutines fields%setMesh and fields%init
+  ! 
+  ! Assigns the base mesh of the field and the initial values
+
+  subroutine fields_setMesh(this, base, num_fields)
      class(fields), intent(inout) :: this
-     type(mesh), intent(in) :: base_mesh
+     type(mesh), intent(in) :: base
+     integer, intent(in) :: num_fields
 
-     this%base_mesh = base_mesh
+     this%base = base
 
-     allocate(this%values(num_fields,base_mesh%num_pt))
-     allocate(this%elem_values(num_fields, base_mesh%num_elem, base_mesh%num_pt))
+     allocate(this%values(num_fields,base%num_pt))
+     allocate(this%elem_values(num_fields, base%num_elem, base%num_pt))
   end subroutine
 
   subroutine fields_init(this, values)
      class(fields), intent(inout) :: this
-     real(kind(0.0d0)), dimension(this%num_fields,this%base_mesh%num_pt) :: values
+     real(kind(0.0d0)), dimension(this%num_fields,this%base%num_pt) :: values
 
      this%values = values
   end subroutine
 
+  ! subroutines fields%getElemValues and fields%projectElemValues
+  !
+  ! Converts between the nodal and elemental representation of the fields
+  ! and enforces continuity on the elemental representation.
+
   subroutine fields_getElemValues(this)
      implicit none
      class(fields), intent(inout) :: this
-     integer :: p, i, f
+     integer :: m, p, i, f
 
-     do m = 1, this%num_elem
+     do m = 1, this%base%num_elem
         do f = 1, this%num_fields
-           do i = 1, this%num_ept
-              p = this%base_mesh%structure(m,i)
+           do i = 1, this%base%num_quad
+              p = this%base%structure(m,i)
               this%elem_values(f, m, i) = this%values(f, p)
            enddo
         enddo
@@ -408,25 +443,27 @@ module hesiod
      implicit none
      class(fields), intent(inout) :: this
      integer :: n, p, f, m, i
+     real(kind(0.0d0)) :: psum
 
-     n = (this%deg+1)**this%dim     
+     n = (this%base%deg+1)**this%base%dim     
 
-
-     do p = 1, this%num_pt
-        values(p) = 0.0d0
+     do f = 1, this%num_fields
+        do p = 1, this%base%num_pt
+           this%values(f,p) = 0.0d0
+        enddo
      enddo
 
      do f = 1, this%num_fields
-        do m = 1, this%num_elem
+        do m = 1, this%base%num_elem
            do i = 1, n
-              psum = values(f,this%base_mesh%structure(m,i))
-              values(f,this%base_mesh%structure(m,i)) = psum + projector(m,i)*elem_values(m,f,i)
+              psum = this%values(f,this%base%structure(m,i))
+              this%values(f,this%base%structure(m,i)) = psum + this%base%projector(m,i)*this%elem_values(m,f,i)
            enddo
         enddo
 
-        do m = 1, this%num_elem
+        do m = 1, this%base%num_elem
            do i = 1, n
-              p = this%base_mesh%structure(m,i)
+              p = this%base%structure(m,i)
               this%elem_values(m, f, i) = this%values(f, p)
            enddo
         enddo
@@ -437,21 +474,29 @@ module hesiod
 ! EQUATION SUBROUTINES !
 !!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine equation_addOps(this, num_split, operators)
-     class(equation(:,:,:)) :: this
-     integer :: num_split
-     real(kind(0.0d0)), dimension(this%num_fields, num_split) :: operators
+  ! subroutines equation%addOps and equation%addTheta
+  !
+  ! Lets the user define the equation, splitting order, and degree of implicity.
 
+  subroutine equation_addOps(this, num_split, operators, dim, num_field, num_quad)
+     integer :: dim, num_field, num_quad
+     class(equation) :: this
+     integer :: num_split
+     type(fn_ptr), dimension(num_fields, num_split) :: operators
+
+     this%dim = dim
+     this%num_field = num_field
+     this%num_quad = num_quad
      this%num_split = num_split
      allocate(this%operators(this%num_fields, num_split))
      this%operators = operators
   end subroutine equation_addOps
 
   subroutine equation_addTheta(this, theta)
-     class(equation(:,:,:)) :: this
+     class(equation) :: this
      real(kind(0.0d0)) :: theta
 
      this%theta = theta
-  end subroutine equation_addInfo
+  end subroutine equation_addTheta
 end module hesiod
 
