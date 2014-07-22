@@ -1,4 +1,4 @@
-!---------------------------------------------------------!
+!--------------------*-------------------------------------!
 !--------------------- HESIOD v1.0 -----------------------!
 !---------------------------------------------------------!
 !  Defines the types that will be used in the HOMER       !
@@ -34,7 +34,7 @@ module hesiod
      integer, dimension(:), allocatable :: bd						!num_bd
      real(kind(0.0d0)), dimension(:), allocatable :: weightProds			!num_quad
      real(kind(0.0d0)), dimension(:,:), allocatable :: derivs			!deg+1,deg+1
-     real(kind(0.0d0)), dimension(:,:,:), allocatable :: diffs			!dim, num_quad, num_quad
+     real(kind(0.0d0)), dimension(:,:,:), allocatable :: diff			!dim, num_quad, num_quad
      real(kind(0.0d0)), dimension(:,:,:,:), allocatable :: jac_mat, jac_inv 		!num_elem, dim, dim, num_quad
      real(kind(0.0d0)), dimension(:,:,:,:), allocatable :: grad 			!num_elem, dim, num_quad, num_quad
      real(kind(0.0d0)), dimension(:,:), allocatable :: jac, Jw				!num_elem, num_quad
@@ -54,6 +54,7 @@ module hesiod
      procedure :: calcGrad => mesh_calcGrad
      procedure :: calcWeights => mesh_calcWeights
      procedure :: calcProj => mesh_calcProj
+     procedure :: load => mesh_load
 
   end type mesh
 
@@ -82,10 +83,11 @@ module hesiod
   ! Contains a pointer to a function. Allows us to create functional arrays.
 
   interface rhs_form
-     function RHS(dim, num_fields, num_quad, u, diff, grad, t) result(ans)
+     function RHS(dim, num_fields, num_quad, diff,grad,Jw, u, t) result(ans)
         integer, intent(in) :: dim, num_fields, num_quad
         real(kind(0.0d0)), dimension(num_fields, num_quad) :: u
         real(kind(0.0d0)), dimension(dim, num_quad, num_quad) :: diff, grad
+        real(kind(0.0d0)), dimension(num_quad) :: Jw
         real(kind(0.0d0)), dimension(num_quad) :: ans
         real(kind(0.0d0)) :: t
      end function RHS
@@ -144,7 +146,7 @@ module hesiod
      allocate(this%coords(num_pt,dim))
      allocate(this%weightProds(num_quad))
      allocate(this%derivs((deg+1),(deg+1)))
-     allocate(this%diffs(dim,num_quad,num_quad))
+     allocate(this%diff(dim,num_quad,num_quad))
      allocate(this%jac_mat(num_elem,dim,dim,num_quad))
      allocate(this%jac_inv(num_elem,dim,dim,num_quad))
      allocate(this%grad(num_elem,dim,num_quad,num_quad))
@@ -254,7 +256,7 @@ module hesiod
                     if (jv(b) .ne. iv(b)) diff = 0.0d0
                  endif
               enddo
-              this%diffs(a,i,j) = diff
+              this%diff(a,i,j) = diff
             enddo
          enddo
       enddo
@@ -280,7 +282,7 @@ module hesiod
               do i = 1, n
                  jsum = 0.0d0
                  do j = 1, n
-                   jsum = jsum + this%diffs(a,i,j)*this%coords(this%structure(m,j),b)
+                   jsum = jsum + this%diff(a,i,j)*this%coords(this%structure(m,j),b)
                  enddo
                  this%jac_mat(m,a,b,i) = jsum
               enddo
@@ -331,7 +333,7 @@ module hesiod
               do a = 1, this%dim
                  dsum = 0.0d0
                  do b = 1, this%dim
-                    dsum = dsum + this%jac_inv(m,a,b,i)*this%diffs(b,i,j)
+                    dsum = dsum + this%jac_inv(m,a,b,i)*this%diff(b,i,j)
                  enddo
                  this%grad(m,a,i,j) = dsum
               enddo
@@ -392,6 +394,48 @@ module hesiod
         enddo
      enddo
   end subroutine mesh_calcProj
+
+  subroutine mesh_load(this, mshfile)
+     class(mesh), intent(inout) :: this
+     character(len=*) :: mshfile
+     integer :: dim, deg, n, m, nquad, en, em, i, a
+     real(kind(0.0d0)), dimension(:), allocatable :: quad, weights
+     integer, dimension(:,:), allocatable :: structure
+     real(kind(0.0d0)), dimension(:,:), allocatable :: coords
+        
+     open(unit=111,file=trim(mshfile))
+     read(111,*) dim, deg, em, en
+     nquad = (deg+1)**dim
+     
+     allocate(quad(deg+1))
+     allocate(weights(deg+1))
+     allocate(structure(em,nquad))
+     allocate(coords(en,dim))
+     
+     read(111,*) (quad(i),i=1,deg+1)
+     read(111,*) (weights(i),i=1,deg+1)
+     
+     do m = 1, em
+        read(111,*) (structure(m,i),i=1,nquad)
+     enddo 
+
+     do n = 1, en
+        read(111,*) (coords(n,a),a=1,dim)
+     enddo
+
+     call this%setParam(dim, deg, em, en, 1)
+     call this%setForm(structure, coords, quad, weights)
+     call this%calcDPhi
+     call this%calcDiff
+     call this%calcJacMat
+     call this%calcJacInv
+     call this%calcJac
+     call this%calcGrad
+     call this%calcWeights
+     call this%calcProj
+     close(111)
+  end subroutine
+
 
 !!!!!!!!!!!!!!!!!!!!!!
 ! FIELDS SUBROUTINES !
@@ -478,14 +522,14 @@ module hesiod
   !
   ! Lets the user define the equation, splitting order, and degree of implicity.
 
-  subroutine equation_addOps(this, num_split, operators, dim, num_field, num_quad)
-     integer :: dim, num_field, num_quad
+  subroutine equation_addOps(this, num_split, operators, dim, num_fields, num_quad)
+     integer :: dim, num_fields, num_quad
      class(equation) :: this
      integer :: num_split
      type(fn_ptr), dimension(num_fields, num_split) :: operators
 
      this%dim = dim
-     this%num_field = num_field
+     this%num_fields = num_fields
      this%num_quad = num_quad
      this%num_split = num_split
      allocate(this%operators(this%num_fields, num_split))
