@@ -83,13 +83,13 @@ module hesiod
   ! Contains a pointer to a function. Allows us to create functional arrays.
 
   interface rhs_form
-     function RHS(dim, num_fields, num_quad, diff,grad,Jw, u, t) result(ans)
-        integer, intent(in) :: dim, num_fields, num_quad
-        real(kind(0.0d0)), dimension(num_fields, num_quad) :: u
-        real(kind(0.0d0)), dimension(dim, num_quad, num_quad) :: diff, grad
-        real(kind(0.0d0)), dimension(num_quad) :: Jw
-        real(kind(0.0d0)), dimension(num_quad) :: ans
-        real(kind(0.0d0)) :: t
+     function RHS(dim, num_fields, num_quad, diff,grad,Jw, u,q, t) result(ans)
+        integer, intent(in) :: dim, num_fields, num_quad, q
+        real(kind(0.0d0)), dimension(num_fields, num_quad), intent(in) :: u
+        real(kind(0.0d0)), dimension(dim, num_quad, num_quad), intent(in) :: diff, grad
+        real(kind(0.0d0)), dimension(num_quad), intent(in) :: Jw
+        real(kind(0.0d0)) :: ans
+        real(kind(0.0d0)), intent(in) :: t
      end function RHS
   end interface rhs_form
 
@@ -451,9 +451,10 @@ module hesiod
      integer, intent(in) :: num_fields
 
      this%base = base
+     this%num_fields = num_fields
 
      allocate(this%values(num_fields,base%num_pt))
-     allocate(this%elem_values(num_fields, base%num_elem, base%num_pt))
+     allocate(this%elem_values(num_fields, base%num_elem, base%num_quad))
   end subroutine
 
   subroutine fields_init(this, values)
@@ -497,21 +498,23 @@ module hesiod
         enddo
      enddo
 
+
      do f = 1, this%num_fields
         do m = 1, this%base%num_elem
            do i = 1, n
               psum = this%values(f,this%base%structure(m,i))
-              this%values(f,this%base%structure(m,i)) = psum + this%base%projector(m,i)*this%elem_values(m,f,i)
+              this%values(f,this%base%structure(m,i)) = psum + this%base%projector(m,i)*this%elem_values(f,m,i)
            enddo
         enddo
 
         do m = 1, this%base%num_elem
            do i = 1, n
               p = this%base%structure(m,i)
-              this%elem_values(m, f, i) = this%values(f, p)
+              this%elem_values(f,m, i) = this%values(f, p)
            enddo
         enddo
      enddo
+
   end subroutine fields_projectElemValues
 
 !!!!!!!!!!!!!!!!!!!!!!!!
