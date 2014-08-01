@@ -97,7 +97,8 @@ contains
      real(kind(0.0d0)), dimension(el_per_proc,eqn%num_quad) :: Jw
      real(kind(0.0d0)), dimension(el_per_proc,eqn%num_fields,eqn%num_quad) :: val
 
-     integer :: ierr, status(MPI_STATUS_SIZE), m, j, n
+     integer :: ierr, status(MPI_STATUS_SIZE), m, j, n, f
+     character(len=20) :: idstring, nstring
      real(kind(0.0d0)) :: t
 
      ! Receive data from homer_init
@@ -165,10 +166,10 @@ contains
         ! Write most recent data to file
 
         if (nprint .ge. 1) then
-           if (mod(n,nprint) .eq. 1) then
+           if (mod(n-1,nprint) .eq. 0) then
               write(nstring,*) n-1
               nstring = adjustl(nstring)
-              open(1,file=trim(filename)//"-"//trim(nstring))
+              open(1,file=trim(adjustl(filename))//"-"//trim(nstring),recl=500)
               do p = 1, fld%base%num_pt
                  write(1,*) p, (fld%base%coords(p,a),a=1,fld%base%dim), (fld%values(f,p),f=1,fld%num_fields)
               enddo
@@ -188,23 +189,6 @@ contains
               endif
            enddo
         enddo
-
-        !!!!!! REMOVE THIS PART WHEN DONE TESTING
-        ! Print elemental values of fields
-
-        if (nprint .ge. 1) then
-           if (mod(n,nprint) .eq. 1) then
-              open(1,file=trim(filename)//"Elem-"//trim(nstring))
-              do m = 1, fld%base%num_elem
-                 do i = 1, fld%base%num_quad
-                    p = fld%base%structure(m,i)
-                    write(1,*) m,i, (fld%base%coords(p,a),a=1,fld%base%dim), (fld%elem_values(f,m,i),f=1,fld%num_fields)
-                 enddo
-              enddo
-              write(*,*) "Timestep n="//trim(nstring)//" written to file."
-              close(1)
-           endif
-        endif
 
         ! Perform weighted average on element boundaries
 
@@ -226,10 +210,10 @@ contains
      ! Print final data
 
      if (nprint .ge. 1) then
-        if (mod(ntsteps,nprint) .eq. 1) then
+        if (mod(ntsteps,nprint) .eq. 0) then
            write(nstring,*) ntsteps
            nstring = adjustl(nstring)
-           open(1,file=trim(filename)//"-"//trim(nstring))
+           open(1,file=trim(adjustl(filename))//"-"//trim(nstring),recl=500)
            do p = 1, fld%base%num_pt
               write(1,*) p, (fld%base%coords(p,a),a=1,fld%base%dim), (fld%values(f,p),f=1,fld%num_fields)
            enddo
