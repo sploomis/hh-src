@@ -1,46 +1,188 @@
-██╗  ██╗ ██████╗ ███╗   ███╗███████╗██████╗                 
-██║  ██║██╔═══██╗████╗ ████║██╔════╝██╔══██╗                
-███████║██║   ██║██╔████╔██║█████╗  ██████╔╝    █████╗      
-██╔══██║██║   ██║██║╚██╔╝██║██╔══╝  ██╔══██╗    ╚════╝      
-██║  ██║╚██████╔╝██║ ╚═╝ ██║███████╗██║  ██║                
-╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚══════╝╚═╝  ╚═╝                
-                                                            
-                ██╗  ██╗███████╗███████╗██╗ ██████╗ ██████╗ 
-                ██║  ██║██╔════╝██╔════╝██║██╔═══██╗██╔══██╗
-                ███████║█████╗  ███████╗██║██║   ██║██║  ██║
-                ██╔══██║██╔══╝  ╚════██║██║██║   ██║██║  ██║
-                ██║  ██║███████╗███████║██║╚██████╔╝██████╔╝
-                ╚═╝  ╚═╝╚══════╝╚══════╝╚═╝ ╚═════╝ ╚═════╝ 
-                                                            
-                       Written at
-       ___________  _____  ____                      
-      / ___/ __/ / / / _ \/ __/                      
-     / /___\ \/ /_/ / , _/ _/                        
-     \___/___/\____/_/|_/___/_       ___  ___ _______
-              / _ \/ __/ / / /      |_  |/ _ <  / / /
-             / , _/ _// /_/ /      / __// // / /_  _/
-            /_/|_/___/\____/      /____/\___/_/ /_/  
+██╗  ██╗ ██████╗ ███╗   ███╗███████╗██████╗                 !
+██║  ██║██╔═══██╗████╗ ████║██╔════╝██╔══██╗                !
+███████║██║   ██║██╔████╔██║█████╗  ██████╔╝    █████╗      !
+██╔══██║██║   ██║██║╚██╔╝██║██╔══╝  ██╔══██╗    ╚════╝      ! 
+██║  ██║╚██████╔╝██║ ╚═╝ ██║███████╗██║  ██║                !
+╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚══════╝╚═╝  ╚═╝                !
+                                                            !
+                ██╗  ██╗███████╗███████╗██╗ ██████╗ ██████╗ !
+                ██║  ██║██╔════╝██╔════╝██║██╔═══██╗██╔══██╗!
+                ███████║█████╗  ███████╗██║██║   ██║██║  ██║!
+                ██╔══██║██╔══╝  ╚════██║██║██║   ██║██║  ██║!
+                ██║  ██║███████╗███████║██║╚██████╔╝██████╔╝!  
+                ╚═╝  ╚═╝╚══════╝╚══════╝╚═╝ ╚═════╝ ╚═════╝ !
+                                                            !
+                        (V. 0.5)                            !
+                                                            !
+                       Written at                           !
+       ___________  _____  ____                             !
+      / ___/ __/ / / / _ \/ __/                             !
+     / /___\ \/ /_/ / , _/ _/                               !
+     \___/___/\____/_/|_/___/_       ___  ___ _______       !
+              / _ \/ __/ / / /      |_  |/ _ <  / / /       !
+             / , _/ _// /_/ /      / __// // / /_  _/       !
+            /_/|_/___/\____/      /____/\___/_/ /_/         !
+                                                            !
+                 in collaboration with                      !
+          _ ___ ___ ___     _  _ ___ ___ ___                !
+       _ | |_ _/ __/ __|   | \| |_ _/ __/ __|               !
+      | || || | (__\__ \_  | .` || | (__\__ \_              !
+       \__/|___\___|___( ) |_|\_|___\___|___( )             !
+       _   _ _____ _  _|/    ___  ___ _  _ _|/              !
+      | | | |_   _| |/ /    / _ \| _ \ \| | |               !
+      | |_| | | | | ' < _  | (_) |   / .` | |__             !
+       \___/  |_| |_|\_( )  \___/|_|_\_|\_|____|            !
+                       |/                                   !
+                                                            !
+                                _  _ ___ ___                !
+                               | \| / __| __|               !
+         with funding from the | .` \__ \ _|                !
+                               |_|\_|___/_|                 !
+                                                            !
+              Author: Samuel Loomis, NCSU                   !
+                                                            !
+            Mentors: John Drake, PhD.  (UTK)                !
+                     Joshua Fu, PhD.   (UTK)                !
+                     Kwai Wong, PhD.   (UTK/ORNL)           !
+                                                            !
+          Special thanks to: Xinshi Chan  (CUHK)            !
+                             Jian Sun     (UTK)             !
+        for helpful conversations and code testing.         !
+                                                            !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-                 in collaboration with
-          _ ___ ___ ___     _  _ ___ ___ ___    
-       _ | |_ _/ __/ __|   | \| |_ _/ __/ __|   
-      | || || | (__\__ \_  | .` || | (__\__ \_  
-       \__/|___\___|___( ) |_|\_|___\___|___( ) 
-       _   _ _____ _  _|/    ___  ___ _  _ _|/  
-      | | | |_   _| |/ /    / _ \| _ \ \| | |   
-      | |_| | | | | ' < _  | (_) |   / .` | |__ 
-       \___/  |_| |_|\_( )  \___/|_|_\_|\_|____|
-                       |/                       
+Homer-Hesiod is a pair of Fortran modules designed to allow the user to solve
+multi-dimensional PDEs using the Spectral Element Method (SEM).
 
-                                _  _ ___ ___ 
-                               | \| / __| __|
-         with funding from the | .` \__ \ _| 
-                               |_|\_|___/_|  
+Currently the modules have been written for and tested under the following restrictions:
 
-              Author: Samuel Loomis, NCSU
+	(08/04/14)	- Up to two dimensions
+	(08/04/14)	- Homogeneous Neumann boundary conditions (du/dn = 0 at boundary)
+	(08/04/14)	- Forward Euler integration
+	(08/04/14)	- No operator splitting
 
-           Mentors: John Drake, PhD.  (UTK)
-                    Joshua Fu, PhD.   (UTK)
-                    Kwai Wong, PhD.   (UTK/ORNL)
+The code has been used to accurately solve problems of the following forms:
 
+	(08/04/14)	- Diffusion/Convection/Reaction chemical transport
 
+----------------------------------------------------------------------------------------
+
+Currently HH consists of two modules, Homer and Hesiod. Homer is responsible for the actual
+integration process, while Hesiod stores the data types which contain information about
+the mesh, fields, and equation.
+
+Below is a short guide to using HH in your program. 
+
+---HESIOD---
+
+Using Hesiod in your program is fairly straightforward; one only needs to include the 'use hesiod'
+statement at the top of the file, and then define variables with the following data types:
+
+	mesh		Stores information about the mesh!
+
+				REQUIRES:		num_elem	Number of elements					integer
+							num_pt		Number of points					integer
+							deg		Polynomial interpolation degree				integer
+							dim		Dimension						integer
+							structure	Structure of matrix					integer(num_elem,(deg+1)**dim)
+							quad		Quadrature points on reference interval [-1,1]		double(deg+1)
+							weights		Weights for above quadrature points			double(deg+1)
+							coords		Coordinates for each point				double(num_pt,dim)
+
+				OTHER ATTRIBUTES:	weightProds	Diagonal components of mass matrix for a single		double(num_quad)
+									element, according to the reference cube.		
+							derivs		Derivatives of the Lagrange polynomials, at the		double(deg+1,deg+1)
+									quadrature points.
+							diff		Derivative matrix for an element, w.r.t. the		double(dim,num_quad,num_quad)
+									reference cube.
+							grad		Derivative matrix for an element, w.r.t. the		double(dim,num_quad,num_quad)
+									embedding space.
+							jac_mat		Jacobian matrix for an element.				double(num_elem,dim,dim,num_quad)
+							jac_inv		Jacobian matrix inverse.				double(num_elem,dim,dim,num_quad)
+							jac		Jacobian (determinant of jac_mat)			double(num_elem,num_quad)
+							Jw		Diagonal components of mass matrix for a single		double(num_elem,num_quad)
+									element, according to the embedding space.
+							projector	Diagonal elements of projection matrix on a		double(num_elem,num_quad)
+									particular element
+
+				SUBROUTINES
+							setParam	Sets integer parameters: num_elem, num_pt, deg,
+									and dim.
+							setForm		Sets array parameters: structure, coords, quad,
+									and weights.
+							calcDPhi	Calculates the derivatives of the basis functions.
+							calcDiff	Calculates the components of the derivative
+									matrix w.r.t. the reference cube.
+							calcJacMat	Calculates the Jacobian of the mapping from the
+									reference cube to the embedding space.
+							calcJacInv	Calculates the inverse of the Jacobian.
+							calcJac		Calculates the determinant of the Jacobian.
+							calcGrad	Calculates the components of the derivative
+									matrix w.r.t. the embedding space.
+							calcWeights	Calculates the mass matrix of the entire mesh.
+							calcProj	Calculates the projection matrix for boundaries.
+							load		Loads a mesh file into a mesh type.
+
+	fields		Stores information about the fields!
+				REQUIRES:		num_fields	Number.							integer
+							values		Values of the field at nodal points.			double(num_fields,num_pt)
+							base		The base mesh on which the field is defined.		mesh
+
+				OTHER ATTRIBUTES:	elem_values	Values of the field at quadrature points, indexed	double(num_elem,num_fields,num_quad)
+									by element.
+
+				SUBROUTINES
+							setMesh			Assigns the base mesh of the field.
+							init			Assigns initial values of the field.
+							getElemValues		Gets elem_values from values.
+							projectElemValues	Enfores continuity on element boundaries by
+										averaging discontinuous values.
+
+	fn_ptr 		Stores a function fitting a particular format.
+				REQUIRES:		fp		The pointer to our stored function.			procedure pointer
+
+	equation	Stores information about the equations being solved, and how to solve them.
+				REQUIRES:		dim		Dimension of the space.					integer
+							num_fields	Number of fields.					integer
+							num_quad	Number of quadrature points.				integer
+							num_split	Number of ways to split the operators.			integer
+							operators       Array of functions representing RHS of the		operators(num_fields,num_split)
+                                                                        differential equations.
+							theta		The parameter for implicit Euler evolution.		double
+
+				SUBROUTINES
+							addOps		Allows user to define num_split, operators,
+									dim, num_fields and num_quad.
+							addTheta	Allows user to define the implicit parameter theta.
+
+Two example codes, 'test1d.F90' and 'test2d.F90', are provided, showing how these types are used in practice.
+
+---HOMER---
+
+To use Homer, put 'use homer' at the beginning of your program with the 'use hesiod' statement.
+Using Homer consists of calling the given procedures on different processors. As projecting is
+done on the root processor for now (this will be altered later), two of our procedures are called
+from the root processor and the third is called from each elemental processor.
+
+Detailed documentation of each procedure is given in the comments in 'homer.F90'.
+
+ROOT PROCEDURES:
+	homer_init			Allows the user to input how elements map to processors,
+					as well as field values to be sent to the relevant processors.
+
+	homer_integrate_root		Receives information from elemental processors, and uses
+					fields%projectElemValues to average out discontinuities.
+					Also prints output values to file.
+
+ELEMENTAL PROCEDURES:
+	homer_integrate_elem 		Receives averaged values from homer_integrate_root,
+					evolves them forwards through a single timestep, and
+					sends information back to the root. Repeats this process
+					until integration is complete.
+
+One of the most important variables passed to these procedures is the map array. If there are
+num_proc elemental processors, and elem_per_proc elements assigned to each elemental processor,
+then map has dimensions (num_proc,el_per_proc) and the array map(i,:) tells us which elements (by number)
+are mapped to processor i.
+
+Proper use of these procedures is demonstrated in the given example code.

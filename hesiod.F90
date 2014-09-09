@@ -1,4 +1,4 @@
-!--------------------*-------------------------------------!
+!---------------------------------------------------------!
 !--------------------- HESIOD v1.0 -----------------------!
 !---------------------------------------------------------!
 !  Defines the types that will be used in the HOMER       !
@@ -127,9 +127,9 @@ module hesiod
   !
   ! getCoords and getIndex determine the relationship between these two indexing methods.
 
-  subroutine mesh_setParam(this, dim, deg, num_elem, num_pt, num_lyr)
+  subroutine mesh_setParam(this, dim, deg, num_elem, num_pt)!, num_lyr)
      class(mesh), intent(inout) :: this
-     integer, intent(in) :: dim, deg, num_elem, num_pt, num_lyr
+     integer, intent(in) :: dim, deg, num_elem, num_pt!, num_lyr
      integer :: num_quad
      num_quad = (deg+1)**dim
 
@@ -137,7 +137,7 @@ module hesiod
      this%deg = deg
      this%num_elem = num_elem
      this%num_pt = num_pt
-     this%num_lyr = num_lyr
+     !this%num_lyr = num_lyr
      this%num_quad = num_quad
 
      allocate(this%structure(num_elem, num_quad))
