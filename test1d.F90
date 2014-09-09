@@ -48,7 +48,7 @@ program test1d
   el_per_proc = 1
   call MPI_COMM_RANK(MPI_COMM_WORLD,my_id,ierr)
 
-  m = 40                  !<-- Setting number of elements. Must have generated a mesh with these elements through genMesh1d.
+  m = 40                  !<-- Setting number of elements. Must have generated a mesh with these elements through genMesh.
 
   operators(1,1)%fp => RHS1   !<-- Stores the function RHS1 in operators(1,1)
   operators(2,1)%fp => RHS2   !<-- Stores the function RHS2 in operators(2,1)

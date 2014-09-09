@@ -20,7 +20,7 @@
 !               u (x) = {
 !                2      { 0						otherwise
 ! 
-!           over the region 0 < x < 1, 0 < y < 1 and time 0 < t < 1.
+!           over the region 0 < x < 1, 0 < y < 1 and time 0 < t < 10.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 program test2d
@@ -43,7 +43,7 @@ program test2d
 
   call MPI_COMM_SIZE(MPI_COMM_WORLD,mpisize,ierr)
   num_proc = mpisize - 1              !<-- total processors = number of elemental processors + root processor
-  el_per_proc = 1
+  el_per_proc = 5
   call MPI_COMM_RANK(MPI_COMM_WORLD,my_id,ierr)
 
   operators(1,1)%fp => RHS1           !<-- Stores the function RHS1 in operators(1,1)
@@ -88,9 +88,11 @@ program test2d
      call u%init(values)
      call u%getElemValues
 
-     !--- Here we define the map array. Since el_per_proc = 1, each row of the map contains one element.
-     do i = 1, m
-        map(i,1) = i
+     !--- Here we define the map array. Since el_per_proc = 5, each row of the map contains five elements.
+     do i = 1, m/el_per_proc
+        do j = 1, el_per_proc
+           map(i,j) = (i-1)*m1 + j
+        enddo
         !--- We also send the number of timesteps and timestep size out to the elemental processors.
         call MPI_SEND(ntsteps,1,MPI_INTEGER,i,0,MPI_COMM_WORLD,ierr)
         call MPI_SEND(dt,1,MPI_DOUBLE_PRECISION,i,0,MPI_COMM_WORLD,ierr)
